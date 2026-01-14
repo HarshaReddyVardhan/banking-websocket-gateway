@@ -15,6 +15,13 @@ spec:
       labels:
         app: websocket-gateway
     spec:
+      # Pod-level security context
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+      
       containers:
         - name: websocket-gateway
           image: banking-websocket-gateway:latest
@@ -35,6 +42,22 @@ spec:
                 configMapKeyRef:
                   name: websocket-config
                   key: KAFKA_BROKERS
+          
+          # Container-level security context
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          
+          # Volume mounts for writable directories
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: logs
+              mountPath: /app/logs
+          
           resources:
             requests:
               memory: "256Mi"
@@ -48,13 +71,27 @@ spec:
               port: 8080
             initialDelaySeconds: 15
             periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /ready
               port: 8080
             initialDelaySeconds: 10
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
           lifecycle:
             preStop:
               exec:
                 command: ["/bin/sh", "-c", "sleep 10"]
+      
+      # Volumes for read-only root filesystem
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}
+      
+      # Graceful termination
+      terminationGracePeriodSeconds: 30
